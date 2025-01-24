@@ -1,63 +1,72 @@
+# Load model directly
 import streamlit as st
-import speech_recognition as sr
-from pydub import AudioSegment
-import os
+import torch
+import numpy as np
+import librosa
+from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq, pipeline
+from io import BytesIO
 
-# Save the uploaded file temporarily
-def save_uploaded_file(uploaded_file):
-    temp_file_path = f"temp_{uploaded_file.name}"
-    with open(temp_file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return temp_file_path
+# Configure Streamlit page settings
+st.set_page_config(
+    page_title="Transcribe with Whisper",
+    page_icon=":rocket:",
+    layout="centered"
+)
 
-# Convert MP3 to PCM WAV
-def convert_audio_to_pcm_wav(mp3_file_path):
-    audio = AudioSegment.from_file(mp3_file_path)
-    wav_file_path = mp3_file_path.split(".")[0] + ".wav"
-    
-    # Export the file in PCM WAV format (16-bit, 44.1kHz)
-    audio.export(wav_file_path, format="wav", parameters=["-acodec", "pcm_s16le", "-ar", "44100"])
-    
-    return wav_file_path
+st.title("🎙️ Whisper Audio Transcriber")
+st.divider()
 
-# Speech-to-text conversion using speech_recognition
-def speech_to_text(wav_file_path):
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(wav_file_path) as source:
-        audio = recognizer.record(source)
-        try:
-            text = recognizer.recognize_google(audio)
-            return text
-        except sr.UnknownValueError:
-            return "Could not understand audio"
-        except sr.RequestError as e:
-            return f"Error: {str(e)}"
+# Set up device and data type
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
-# Main Streamlit app function
-def main():
-    st.title("Speech to Text Converter")
-    st.write("Upload multiple audio files and convert them to text.")
+# Load the Whisper model and processor
+with st.spinner("🚀 Loading Whisper model... please wait!"):
+    model_name = "openai/whisper-large-v3"
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        model_name, 
+        torch_dtype=torch_dtype, 
+        low_cpu_mem_usage=True, 
+        use_safetensors=True
+    )
+    model.to(device)
+    processor = AutoProcessor.from_pretrained(model_name)
 
-    uploaded_files = st.file_uploader("Choose audio files", type=["wav", "mp3"], accept_multiple_files=True)
+# Initialize ASR pipeline
+asr_pipe = pipeline(
+    task="automatic-speech-recognition",
+    model=model,
+    tokenizer=processor.tokenizer,
+    feature_extractor=processor.feature_extractor,
+    torch_dtype=torch_dtype,
+    device=device,
+)
 
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            st.write(f"**Processing file:** {uploaded_file.name}")
-            
-            # Save the uploaded file temporarily
-            saved_file_path = save_uploaded_file(uploaded_file)
+st.markdown("Upload your audio files, and let the Whisper model transcribe them instantly. 🚀")
 
-            # If the file is MP3, convert it to PCM WAV
-            if uploaded_file.type == "audio/mpeg":
-                saved_file_path = convert_audio_to_pcm_wav(saved_file_path)
+# File uploader for audio files
+uploaded_files = st.file_uploader("📂 Select audio files to transcribe", type=["wav","mp3"], accept_multiple_files=True)
 
-            # Perform speech-to-text on the PCM WAV file
-            text = speech_to_text(saved_file_path)
-            st.write(f"**Converted Text for {uploaded_file.name}:**")
-            st.write(text)
+# Transcription button and result display
+if uploaded_files:
+    if st.button("✍️ Transcribe"):
+        results = []
 
-            # Clean up by removing the saved files
-            os.remove(saved_file_path)
+        for idx, audio_file in enumerate(uploaded_files):
+            try:
+                # Read audio file
+                audio_data, sr = librosa.load(BytesIO(audio_file.read()), sr=16000)
 
-if __name__ == "__main__":
-    main()
+                # Run ASR pipeline
+                result = asr_pipe(audio_data)
+                transcription = result['text']
+                results.append((audio_file.name, transcription))
+            except Exception as e:
+                st.error(f"Error processing '{audio_file.name}':{e}")
+
+        # Display results
+        st.subheader("Transcriptions")
+        for filename, transcription in results:
+            st.text_area(f"📂 **{filename}**:", value=transcription)
+else:
+    st.info("📤 Please upload audio files to start transcription.")
