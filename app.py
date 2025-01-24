@@ -24,7 +24,7 @@ def download_youtube_audio(youtube_url):
 
 def transcribe_audio(audio_file_path, model_name="base"):
     try:
-        model = whisper.load_model(model_name, weights_only=True)
+        model = whisper.load_model(model_name)
         result = model.transcribe(audio_file_path)
         return result["text"]
     except Exception as e:
@@ -118,17 +118,6 @@ try:
 
 except Exception as e:
     st.error(f"An unexpected error occurred: {e}", icon="🚨")
-
-
-
-
-
-
-
-
-
-
-
 
 
 
