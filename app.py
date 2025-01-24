@@ -1,119 +1,147 @@
 import streamlit as st
+import requests
+from dotenv import load_dotenv
 import os
-from moviepy.editor import VideoFileClip
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-import torch
-import librosa
-import tempfile
-from datetime import timedelta
+import ffmpeg
+from tempfile import NamedTemporaryFile
+import yt_dlp
 
-# Load the pre-trained Wav2Vec2 model and processor from Hugging Face
-processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
-model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-base-960h")
+def process_file(input_file):
+    output_file_name = f"{input_file}_processed.flac"
+    ffmpeg.input(input_file).output(output_file_name, acodec='flac').run(overwrite_output=True)
+    return output_file_name
 
-def convert_video_to_audio(video_path, audio_path):
-    """Convert video file to audio file."""
-    with VideoFileClip(video_path) as video:
-        video.audio.write_audiofile(audio_path)
+def query(filename):
+    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-base.en"
+    # locally
+    # HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    # cloud
+    HUGGINGFACEHUB_API_TOKEN = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+    headers = {"Authorization": f"Bearer {HUGGINGFACEHUB_API_TOKEN}"}
+    with open(filename, "rb") as f:
+        data = f.read()
+    response = requests.post(API_URL, headers=headers, data=data)
+    if response.status_code == 200 :
+        return response.json()["text"]
+    if response.status_code == 503:
+        st.error("The model is currently loading. Please try again in a few minutes.")
+    else:
+        st.markdown("<p style='margin-top: 5rem;'>Report issues <a href='https://github.com/sameemul-haque/TranscribeTool/issues/new?labels=bug&projects=&template=bug_report.md&title=%5Bbug%5D'>here</a> or <a href='mailto:connectinchat@gmail.com?subject=[BUG] TranscribeTool&body=<explain your issue here>'>here</a>.</p>", unsafe_allow_html=True)
+        return response.json()
 
-def transcribe_audio_with_timestamps(audio_path):
-    """Transcribe audio file to text with timestamps using Hugging Face's Wav2Vec2 model."""
-    # Load audio
-    speech, rate = librosa.load(audio_path, sr=16000)
-    
-    # Process audio
-    input_values = processor(speech, sampling_rate=rate, return_tensors="pt").input_values
-    
-    # Perform inference
-    with torch.no_grad():
-        logits = model(input_values).logits
-    
-    # Decode the predicted text
-    predicted_ids = torch.argmax(logits, dim=-1)
-    transcription = processor.batch_decode(predicted_ids)
-    
-    # Generate timestamps
-    duration = librosa.get_duration(y=speech, sr=rate)
-    timestamped_transcript = generate_timestamps(transcription[0], duration)
-    
-    return transcription[0], timestamped_transcript
+def main():
+    st.set_page_config(
+        page_title="TranscribeTool",
+        page_icon="favicon.png",
+    )   
+    hide_streamlit_style = """
+                <style>
+                [data-testid="stToolbar"] {visibility: hidden !important;}
+                header {visibility: hidden !important;}
+                footer {visibility: hidden !important;}
+                [data-testid="stAppViewBlockContainer"] {margin: -4.5rem; !important;}
+                </style>
+                """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)   
+    load_dotenv()
+    st.markdown("<h1 style='text-align: center; color: #a6e3a1;'>TranscribeTool</h1>", unsafe_allow_html=True)
+    st.markdown("<a href='https://github.com/sameemul-haque/TranscribeTool' style='color: #6c7086; font-size: 1rem; text-align: center; position: fixed; top: 0; left: 0; text-decoration: none; border: solid 1px #6c7086; border-radius: 10px; padding: 0.5rem; margin: 1rem;'><img style='display: flex; justify-content: center; align-items: center; width: 1rem; filter: brightness(0) saturate(100%) invert(47%) sepia(12%) saturate(640%) hue-rotate(193deg) brightness(91%) contrast(86%);' src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/github/github-original.svg'/></a>", unsafe_allow_html=True)
 
-def generate_timestamps(transcription, duration):
-    """Generate timestamps for each word in the transcription."""
-    words = transcription.split()
-    words_per_second = len(words) / duration
-    timestamped_transcript = []
+    uploaded_file = st.file_uploader("Upload a video | audio file here")
 
-    for i, word in enumerate(words):
-        time = timedelta(seconds=i / words_per_second)
-        timestamped_transcript.append(f"[{str(time)}] {word}")
+    st.markdown(
+    """
+    <style>
+    .separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: #6c7086;
+    }
 
-    # Group words into paragraphs
-    paragraph_length = 50  # Number of words per paragraph
-    paragraphed_transcript = "\n\n".join(
-        " ".join(timestamped_transcript[i:i + paragraph_length])
-        for i in range(0, len(timestamped_transcript), paragraph_length)
-    )
+    .separator::before,
+    .separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px dotted #6c7086;
+    }
 
-    return paragraphed_transcript
+    .separator:not(:empty)::before {
+    margin-right: .25em;
+    }
 
-def save_transcripts(plain_transcript, timestamped_transcript, base_filename):
-    """Save transcripts in two versions: plain and with timestamps."""
-    # Ensure transcripts directory exists
-    if not os.path.exists("transcripts"):
-        os.makedirs("transcripts")
-    
-    # Save plain transcript
-    plain_text_path = os.path.join("transcripts", f"{base_filename}_plain.txt")
-    with open(plain_text_path, "w") as f:
-        f.write(plain_transcript)
-    
-    # Save timestamped transcript
-    timestamped_text_path = os.path.join("transcripts", f"{base_filename}_timestamped.txt")
-    with open(timestamped_text_path, "w") as f:
-        f.write(timestamped_transcript)
+    .separator:not(:empty)::after {
+    margin-left: .25em;
+    }
+    </style>
+    <div class="separator" data-testid="orSeperator">OR</div>
+    """, 
+    unsafe_allow_html=True)
 
-# Streamlit app
-st.title("Video Transcription App")
-
-# Step 1: Upload video
-uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "avi", "mov", "mkv"])
-
-if uploaded_file is not None:
-    # Create a temporary directory to save uploaded video and audio
-    with tempfile.TemporaryDirectory() as tmpdir:
-        video_path = os.path.join(tmpdir, uploaded_file.name)
+    yturl = st.text_input("Type the URL of a youtube video here")
+    ydl_opts = {
+        'format': 'm4a/bestaudio/best',        
+        'postprocessors': [{ 
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'm4a',
+        }]
+    }
+    if (uploaded_file is not None and (uploaded_file.type.startswith('video/') or uploaded_file.type.startswith('audio/'))) or yturl:
+        if uploaded_file:
+            st.markdown(
+            """
+            <style>
+            [data-testid="stTextInput"] {display: none !important;}
+            [data-testid="orSeperator"] {display: none !important;}
+            </style>
+            """
+            , unsafe_allow_html=True)
+            with st.spinner('Retrieving the text from the video. Please wait...'):
+                with NamedTemporaryFile() as temp:
+                    temp.write(uploaded_file.getvalue())
+                    temp.seek(0)
+                    processed_file = process_file(temp.name)
+                    output = query(f"{processed_file}")
+        if yturl:
+            st.markdown(
+            """
+            <style>
+            [data-testid="stFileUploader"] {display: none !important;}
+            [data-testid="orSeperator"] {display: none !important;}
+            </style>
+            """
+            , unsafe_allow_html=True)
+            with st.spinner('Downloading audio from URL. Please wait...'):
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    try:
+                        info_dict = ydl.extract_info(yturl, download=False)
+                        ydl.download([yturl])
+                        audio_file_path = ydl.prepare_filename(info_dict)[:-3] + "m4a"
+                    except Exception as e:
+                        st.error("An error occurred: " + "  \n  " + f"{e}")
+                processed_file = audio_file_path
+                output = query(f"{processed_file}")
         
-        # Check if a file with the same name already exists
-        if os.path.exists(video_path):
-            st.warning("A file with the same name already exists. Upload a different file or rename your file.")
-        else:
-            # Save video file to the temporary directory
-            with open(video_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            st.write("Video uploaded successfully!")
-            
-            # Convert video to audio
-            audio_path = os.path.splitext(video_path)[0] + ".wav"
-            
-            # Call the function to convert video to audio
-            convert_video_to_audio(video_path, audio_path)
-            
-            st.write("Audio extracted from video successfully!")
-            
-            # Transcribe audio
-            plain_transcript, timestamped_transcript = transcribe_audio_with_timestamps(audio_path)
-            
-            # Display transcription in paragraph format
-            st.write("Plain Transcription:")
-            st.text(plain_transcript)
-            
-            st.write("Transcription with Timestamps:")
-            st.text(timestamped_transcript)
-            
-            # Save transcripts to files
-            base_filename = os.path.splitext(uploaded_file.name)[0]
-            save_transcripts(plain_transcript, timestamped_transcript, base_filename)
-            
-            st.write("Transcripts saved successfully in the 'transcripts' folder.")
+        st.markdown(
+        """
+        <style>
+        [data-testid="stFileUploader"] {display: none !important;}
+        [data-testid="stTextInput"] {display: none !important;}
+        [data-testid="orSeperator"] {display: none !important;}
+        [id="transcribetool"] {margin-bottom: -5rem !important;}
+        </style>
+        """
+        , unsafe_allow_html=True)
+        st.markdown("***")
+        st.write(output)
+        st.code(output, language="None")
+        st.markdown("***")
+        if processed_file is not None:
+            os.remove(processed_file)
+        
+    else:
+        if uploaded_file is not None:
+            st.error("The file type is not supported")
+
+if __name__ == "__main__":
+    main()
