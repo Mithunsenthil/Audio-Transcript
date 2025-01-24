@@ -2,11 +2,12 @@ import streamlit as st
 import speech_recognition as sr
 from pydub import AudioSegment
 
-def convert_audio_to_wav(audio_file):
-    audio = AudioSegment.from_file(audio_file)
-    wav_file = audio_file.name.split(".")[0] + ".wav"
-    audio.export(wav_file, format="wav")
-    return wav_file
+from pydub import AudioSegment
+
+def convert_to_wav(input_file):
+    audio = AudioSegment.from_file(input_file)
+    audio.export("output.wav", format="wav")
+
 
 def speech_to_text(audio_file):
     recognizer = sr.Recognizer()
