@@ -2,3 +2,4 @@ streamlit
 pytube
 openai-whisper
 numba
+ffmpeg
