@@ -6,7 +6,7 @@ import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
-st.set_option('deprecation.showPyplotGlobalUse', False)
+# st.set_option('deprecation.showPyplotGlobalUse', False)
 with open('model_pickle', 'rb') as f:
   model=pickle.load(f) #loading vader model via pickle file instead of NLTK
 
