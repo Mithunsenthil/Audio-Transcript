@@ -4,3 +4,5 @@ librosa
 numpy
 streamlit
 accelerate
+transformers
+io
