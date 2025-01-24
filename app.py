@@ -1,147 +1,100 @@
 import streamlit as st
-import requests
-from dotenv import load_dotenv
-import os
-import ffmpeg
-from tempfile import NamedTemporaryFile
-import yt_dlp
+import pyttsx3
+import platform
 
-def process_file(input_file):
-    output_file_name = f"{input_file}_processed.flac"
-    ffmpeg.input(input_file).output(output_file_name, acodec='flac').run(overwrite_output=True)
-    return output_file_name
+# Set up the page configuration
+st.set_page_config(page_title="Text-to-Speech Generator", layout="centered")
 
-def query(filename):
-    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-base.en"
-    # locally
-    # HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-    # cloud
-    HUGGINGFACEHUB_API_TOKEN = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
-    headers = {"Authorization": f"Bearer {HUGGINGFACEHUB_API_TOKEN}"}
-    with open(filename, "rb") as f:
-        data = f.read()
-    response = requests.post(API_URL, headers=headers, data=data)
-    if response.status_code == 200 :
-        return response.json()["text"]
-    if response.status_code == 503:
-        st.error("The model is currently loading. Please try again in a few minutes.")
+# Title and description
+st.title("Text-to-Speech Generator")
+st.write("Convert your text into speech using pyttsx3.")
+
+# Conditional TTS engine initialization based on OS
+if platform.system() == "Windows":
+    engine = pyttsx3.init(driverName='sapi5')
+else:
+    engine = pyttsx3.init(driverName='espeak')
+
+# Input text box
+text = st.text_area("Enter the text you want to convert to speech:", "", height=150)
+
+# Voice selection
+voices = engine.getProperty('voices')
+voice_options = [voice.name for voice in voices]
+selected_voice = st.selectbox("Select voice:", voice_options, index=0)
+
+# Speed of speech
+speech_speed = st.slider("Select speech speed (100 to 200, default 150):", min_value=100, max_value=200, value=150)
+
+# Generate speech button
+if st.button("Generate Speech"):
+    if text:
+        try:
+            # Set the selected voice
+            for voice in voices:
+                if voice.name == selected_voice:
+                    engine.setProperty('voice', voice.id)
+                    break
+
+            # Set speech rate
+            engine.setProperty('rate', speech_speed)
+
+            # Save speech to a file
+            output_file = "output.mp3"
+            engine.save_to_file(text, output_file)
+            engine.runAndWait()
+            st.audio(output_file, format="audio/mp3")
+
+            # Display success message
+            st.success("Speech generated successfully!")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
     else:
-        st.markdown("<p style='margin-top: 5rem;'>Report issues <a href='https://github.com/sameemul-haque/TranscribeTool/issues/new?labels=bug&projects=&template=bug_report.md&title=%5Bbug%5D'>here</a> or <a href='mailto:connectinchat@gmail.com?subject=[BUG] TranscribeTool&body=<explain your issue here>'>here</a>.</p>", unsafe_allow_html=True)
-        return response.json()
+        st.error("Please enter some text to generate speech.")
 
-def main():
-    st.set_page_config(
-        page_title="TranscribeTool",
-        page_icon="favicon.png",
-    )   
-    hide_streamlit_style = """
-                <style>
-                [data-testid="stToolbar"] {visibility: hidden !important;}
-                header {visibility: hidden !important;}
-                footer {visibility: hidden !important;}
-                [data-testid="stAppViewBlockContainer"] {margin: -4.5rem; !important;}
-                </style>
-                """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)   
-    load_dotenv()
-    st.markdown("<h1 style='text-align: center; color: #a6e3a1;'>TranscribeTool</h1>", unsafe_allow_html=True)
-    st.markdown("<a href='https://github.com/sameemul-haque/TranscribeTool' style='color: #6c7086; font-size: 1rem; text-align: center; position: fixed; top: 0; left: 0; text-decoration: none; border: solid 1px #6c7086; border-radius: 10px; padding: 0.5rem; margin: 1rem;'><img style='display: flex; justify-content: center; align-items: center; width: 1rem; filter: brightness(0) saturate(100%) invert(47%) sepia(12%) saturate(640%) hue-rotate(193deg) brightness(91%) contrast(86%);' src='https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/github/github-original.svg'/></a>", unsafe_allow_html=True)
+# Footer with developer credit
+st.markdown(
+    """
+    <div style="text-align: center; padding: 10px;">
+        <hr>
+        <p style="font-size: 14px; color: gray;">Developed by Salman Maqbool ❤️</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-    uploaded_file = st.file_uploader("Upload a video | audio file here")
-
-    st.markdown(
+# Styling and UI Customization
+st.markdown(
     """
     <style>
-    .separator {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: #6c7086;
+    .stButton button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 18px;
+        margin: 10px 0;
+        transition-duration: 0.4s;
+        cursor: pointer;
+        border-radius: 5px;
     }
-
-    .separator::before,
-    .separator::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px dotted #6c7086;
+    .stButton button:hover {
+        background-color: white;
+        color: #4CAF50;
+        border: 2px solid #4CAF50;
     }
-
-    .separator:not(:empty)::before {
-    margin-right: .25em;
+    .stTextInput textarea {
+        border: 2px solid #4CAF50;
+        border-radius: 5px;
+        padding: 10px;
     }
-
-    .separator:not(:empty)::after {
-    margin-left: .25em;
+    .stSelectbox, .stSlider {
+        margin-top: 10px;
     }
     </style>
-    <div class="separator" data-testid="orSeperator">OR</div>
-    """, 
-    unsafe_allow_html=True)
-
-    yturl = st.text_input("Type the URL of a youtube video here")
-    ydl_opts = {
-        'format': 'm4a/bestaudio/best',        
-        'postprocessors': [{ 
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'm4a',
-        }]
-    }
-    if (uploaded_file is not None and (uploaded_file.type.startswith('video/') or uploaded_file.type.startswith('audio/'))) or yturl:
-        if uploaded_file:
-            st.markdown(
-            """
-            <style>
-            [data-testid="stTextInput"] {display: none !important;}
-            [data-testid="orSeperator"] {display: none !important;}
-            </style>
-            """
-            , unsafe_allow_html=True)
-            with st.spinner('Retrieving the text from the video. Please wait...'):
-                with NamedTemporaryFile() as temp:
-                    temp.write(uploaded_file.getvalue())
-                    temp.seek(0)
-                    processed_file = process_file(temp.name)
-                    output = query(f"{processed_file}")
-        if yturl:
-            st.markdown(
-            """
-            <style>
-            [data-testid="stFileUploader"] {display: none !important;}
-            [data-testid="orSeperator"] {display: none !important;}
-            </style>
-            """
-            , unsafe_allow_html=True)
-            with st.spinner('Downloading audio from URL. Please wait...'):
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    try:
-                        info_dict = ydl.extract_info(yturl, download=False)
-                        ydl.download([yturl])
-                        audio_file_path = ydl.prepare_filename(info_dict)[:-3] + "m4a"
-                    except Exception as e:
-                        st.error("An error occurred: " + "  \n  " + f"{e}")
-                processed_file = audio_file_path
-                output = query(f"{processed_file}")
-        
-        st.markdown(
-        """
-        <style>
-        [data-testid="stFileUploader"] {display: none !important;}
-        [data-testid="stTextInput"] {display: none !important;}
-        [data-testid="orSeperator"] {display: none !important;}
-        [id="transcribetool"] {margin-bottom: -5rem !important;}
-        </style>
-        """
-        , unsafe_allow_html=True)
-        st.markdown("***")
-        st.write(output)
-        st.code(output, language="None")
-        st.markdown("***")
-        if processed_file is not None:
-            os.remove(processed_file)
-        
-    else:
-        if uploaded_file is not None:
-            st.error("The file type is not supported")
-
-if __name__ == "__main__":
-    main()
+    """,
+    unsafe_allow_html=True,
+)
