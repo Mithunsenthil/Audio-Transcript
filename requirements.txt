@@ -1,4 +1,6 @@
-Streamlit
-SpeechRecognition
-PyDub
-ffmpeg
+transformers
+torch
+librosa
+numpy
+streamlit
+accelerate
