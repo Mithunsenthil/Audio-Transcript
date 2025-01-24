@@ -1,6 +1,3 @@
-beautifulsoup4
-matplotlib
-pandas
-praw
 streamlit
-nltk
+pytube
+openai-whisper
