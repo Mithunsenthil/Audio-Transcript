@@ -1,3 +1,4 @@
 Streamlit
 SpeechRecognition
 PyDub
+ffmpeg
