@@ -5,6 +5,10 @@ import tempfile
 import streamlit as st
 import whisper
 from pytube import YouTube
+import warnings
+
+# Suppress FP16 warning
+warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
 
 TMP_PATH = "tmp"
 SUPPORTED_FILE_TYPES = ["mp3", "wav", "flac", "mp4", "m4a", "ogg", "aac", "avi", "mkv"]
