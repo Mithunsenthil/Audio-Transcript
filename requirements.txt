@@ -3,3 +3,6 @@ pytube
 openai-whisper
 numba
 ffmpeg
+shutil
+warnings
+tempfile
