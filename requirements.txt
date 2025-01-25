@@ -1,5 +1,7 @@
-streamlit
-pytube
-openai-whisper
-numba
-ffmpeg
+streamlit==1.32.0
+torch==2.2.0
+openai-whisper==20231117
+pytube==15.0.0
+numpy==1.26.0
+tqdm==4.66.1
+ffmpeg-python==0.2.0
