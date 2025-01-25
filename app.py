@@ -9,6 +9,7 @@ import warnings
 
 # Suppress FP16 warning
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
+warnings.filterwarnings("ignore", category=FutureWarning, message="You are using `torch.load` with `weights_only=False`")
 
 TMP_PATH = "tmp"
 SUPPORTED_FILE_TYPES = ["mp3", "wav", "flac", "mp4", "m4a", "ogg", "aac", "avi", "mkv"]
